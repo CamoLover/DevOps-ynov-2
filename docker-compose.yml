@@ -1,0 +1,121 @@
+services:
+  db_mongo:
+    build:
+      context: ./mongo
+      dockerfile: Dockerfile
+    container_name: db_mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - backend
+    restart: on-failure
+    healthcheck:
+      test: |
+        mongosh --username ${MONGO_ROOT_USER} --password ${MONGO_ROOT_PASSWORD} --quiet --eval "
+        db = db.getSiblingDB('blog_db');
+        const count = db.posts.countDocuments();
+        if (count !== 5) {
+          print('Expected 5 posts, got ' + count);
+          quit(1);
+        }
+        quit(0);
+        " || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  db_mysql:
+    image: mysql:8.0
+    container_name: db_mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sqlfiles:/docker-entrypoint-initdb.d
+    networks:
+      - backend
+    restart: on-failure
+    healthcheck:
+      test: |
+        mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD} &&
+        mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "USE ${MYSQL_DATABASE}; SELECT COUNT(*) FROM utilisateurs;" | grep -q 4 || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  admin_mongo:
+    image: mongo-express:1.0.2
+    container_name: admin_mongo
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USER}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD}
+      - ME_CONFIG_MONGODB_URL=mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@db_mongo:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD}
+    ports:
+      - "8081:8081"
+    networks:
+      - backend
+    depends_on:
+      db_mongo:
+        condition: service_healthy
+    restart: on-failure
+
+  admin_mysql:
+    image: adminer:4.8.1
+    container_name: admin_mysql
+    environment:
+      - ADMINER_DEFAULT_SERVER=db_mysql
+    ports:
+      - "8082:8080"
+    networks:
+      - backend
+    depends_on:
+      db_mysql:
+        condition: service_healthy
+    restart: on-failure
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: api
+    environment:
+      - MONGO_URL=mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@db_mongo:27017/
+      - MYSQL_HOST=db_mysql
+      - MYSQL_USER=root
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_PORT=3306
+    ports:
+      - "8000:8000"
+    networks:
+      - backend
+    depends_on:
+      db_mongo:
+        condition: service_healthy
+      db_mysql:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  mongo_data:
+    driver: local
+  mysql_data:
+    driver: local
+
+networks:
+  backend:
+    driver: bridge
