@@ -1,0 +1,15 @@
+# Documentation
+*.md
+README*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log

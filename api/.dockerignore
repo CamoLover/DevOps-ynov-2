@@ -1,6 +1,3 @@
-# Environment variables
-.env
-
 # Python
 __pycache__/
 *.py[cod]
@@ -12,21 +9,27 @@ env/
 ENV/
 .venv
 
+# Tests
+tests/
+*.pytest_cache
+
+# Documentation
+*.md
+docs/
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS
-.DS_Store
-Thumbs.db
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.local
 
 # Logs
 *.log
-
-# Database volumes
-data/
-mongo_data/
-mysql_data/
