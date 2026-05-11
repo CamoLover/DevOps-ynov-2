@@ -1,6 +1,6 @@
 name: Build and Test Application
 
-# Controls when the action will run
+# Controls when the action will runs
 on:
 # triggers the workflow on push or pull request events but only for the main branches
   push:
